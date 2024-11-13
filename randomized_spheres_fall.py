@@ -1,6 +1,7 @@
 import bpy
 import random
 import math
+from math import radians
 
 # Clear Existing Objects
 bpy.ops.object.select_all(action='SELECT')
@@ -40,6 +41,8 @@ for i in range(num_spheres):
         continue  # Skip this sphere if a position wasn't found
     
     # Create Sphere with Random Position and Scale
+    # Will fail if scene is empty
+    tk.mode("OBJECT")
     bpy.ops.mesh.primitive_uv_sphere_add(location=(x, y, z))
     sphere = bpy.context.object
     scale = random.uniform(0.2, 1.0)
@@ -54,14 +57,26 @@ for i in range(num_spheres):
     red = tk.makeMaterial('Red', (1, 0, 0, alpha), 0.5, 0, 0.1)
     green = tk.makeMaterial('Green', (0, 1, 0, alpha), 0.5, 0, 0.1)
     blue = tk.makeMaterial('Blue', (0, 0, 1, alpha), 0.8, 0.8, 0.2)
-    # material = bpy.data.materials.new(name=f"SolidColorMaterial_{i}")
-    # material.use_nodes = True
-    # bsdf = material.node_tree.nodes["Principled BSDF"]
-    # bsdf.inputs["Base Color"].default_value = (random.random(), random.random(), random.random(), 1)  # Random RGB color
+    me = sphere.data
+    me.materials.append(red)
+    me.materials.append(blue)
+    me.materials.append(green)
+    tk.mode("EDIT")
+    tk.act.select_by_loc((0, 0, 0), (1, 1, 1), 'FACE', 'GLOBAL')
+    # use second material slot
+    sphere.active_material_index = 1
+    bpy.ops.object.material_slot_assign()
+    tk.mode("OBJECT")
+    tk.sel.rotate_z(radians(90))
+    tk.mode("EDIT")
+    tk.act.select_by_loc((0, 0, 0), (1, 1, 1), 'FACE', 'GLOBAL')
+    sphere.active_material_index = 2
+    bpy.ops.object.material_slot_assign()
+    tk.mode("OBJECT")
     
     # Assign the material to the sphere
-    sphere.data.materials.clear()  # Clear any existing materials
-    sphere.data.materials.append(red)  # Apply the new material
+    # sphere.data.materials.clear()  # Clear any existing materials
+    # sphere.data.materials.append(red)  # Apply the new material
 
 # Set Gravity and Frame Settings
 bpy.context.scene.gravity = (0, 0, -9.81)
