@@ -9,20 +9,25 @@ bpy.ops.object.delete(use_global=False)
 
 tk = bpy.data.texts["bco602tk.py"].as_module()
 
-# Create Ground Plane
-bpy.ops.mesh.primitive_plane_add(size=40, location=(0, 0, -5))
-ground = bpy.context.object
-ground.rotation_euler[0] = -0.285
-bpy.ops.rigidbody.object_add()
-ground.rigid_body.type = 'PASSIVE'
+# Create ground planes with collision modifiers
+def create_ground_plane(location, rotation):
+    bpy.ops.mesh.primitive_plane_add(size=40, location=location)
+    ground = bpy.context.object
+    ground.rotation_euler = rotation
 
-bpy.ops.mesh.primitive_plane_add(size=40, location=(0, 0, -5))
-ground = bpy.context.object
-ground.rotation_euler[0] = 0.285
-bpy.ops.rigidbody.object_add()
-ground.rigid_body.type = 'PASSIVE'
- 
-num_spheres = 100
+    # Add a collision modifier
+    bpy.ops.object.modifier_add(type='COLLISION')
+    collision = ground.modifiers["Collision"]
+    collision.settings.thickness_outer = 0.05
+    collision.settings.damping = 0.2
+    return ground
+
+# Create slanted ground planes
+ground1 = create_ground_plane(location=(0, 0, -5), rotation=(-0.285, 0, 0))
+ground2 = create_ground_plane(location=(0, 0, -5), rotation=(0.285, 0, 0))
+
+
+num_spheres = 2
 positions = [
     (-1, -1, -1),
     (-1, -1, -.9),
@@ -51,6 +56,30 @@ colors = [
     (1, 0, 0, 1),(0, 1, 0, 1),(0, 0, 1, 1),
     (1, 1, 0, 1),(1, 0, 1, 1),(0, 1, 1, 1)
 ]
+
+# Function to add soft body physics to an object
+def configure_soft_body(obj):
+    bpy.ops.object.modifier_add(type='SOFT_BODY')
+    soft_body = obj.modifiers["Softbody"]
+
+    # Disable the goal (anchor effect) to allow free falling
+    soft_body.settings.use_goal = False
+
+    # Soft body edge settings
+    soft_body.settings.use_edges = True
+    soft_body.settings.pull = 0.3  # Edge stretch stiffness
+    soft_body.settings.push = 0.3  # Edge compression stiffness
+    soft_body.settings.damping = 0.8  # Smooth out oscillations
+    soft_body.settings.shear = 0.2  # Resistance to shearing
+    soft_body.settings.bend = 0.5  # Resistance to bending
+
+    # Add collision modifier for interaction
+    bpy.ops.object.modifier_add(type='COLLISION')
+    collision = obj.modifiers["Collision"]
+    collision.settings.damping = 0.3  # Collision damping
+    collision.settings.thickness_outer = 0.02  # Outer collision thickness
+    collision.settings.thickness_inner = 0.01  # Inner collision thickness
+
 
 for i in range(num_spheres):
     tk.create.sphere('sphere')
@@ -86,12 +115,18 @@ for i in range(num_spheres):
         bpy.ops.object.material_slot_assign()
 
     tk.mode("OBJECT")
-    bpy.ops.rigidbody.object_add()
+    configure_soft_body(ob)
+
+# Bake the simulation
+bpy.ops.ptcache.free_bake_all()  # Clear previous cache
+bpy.ops.ptcache.bake_all(bake=True)
+
 
 # Set Gravity and Frame Settings
 bpy.context.scene.gravity = (0, 0, -9.81)
 bpy.context.scene.frame_start = 1
-bpy.context.scene.frame_end = 60
+bpy.context.scene.frame_end = 120
+
 
 # Enhanced Physics Settings
 bpy.context.scene.rigidbody_world.substeps_per_frame = 120
