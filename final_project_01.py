@@ -1,161 +1,182 @@
+# 2024 BCO602
+# Furkan Akgun
+# 01.16.2025
+
 import bpy
 import random
 
-# Sahneyi Temizle
-#bpy.ops.object.select_all(action='SELECT')
-#bpy.ops.object.delete()
-
-# Import aktarılan objeyi seç
-flake = bpy.data.objects.get("Snowflake")
-
-# Kar tanelerini çoğalt ve rastgele yerleştir
+flake_name = "Snowflake"
 flake_count = 250
 x_range = (-10, 10)
 y_range = (-10, 10)
 z_range = (0, 5)
 
-for i in range(flake_count):
-    # Kar tanesini kopyala
-    new_flake = flake.copy()
-    new_flake.scale = (1.3, 1.3, 1.3)
-    new_flake.rotation_euler = (
-        random.uniform(0, 6.28),
-        random.uniform(0, 6.28),
-        random.uniform(0, 6.28)
-    )
-    new_flake.location = (
-        random.uniform(*x_range),
-        random.uniform(*y_range),
-        random.uniform(*z_range),
-    )
-    bpy.context.collection.objects.link(new_flake)
-    
-    # Rigidbody ekle
-    bpy.context.view_layer.objects.active = new_flake
+def clear_scene():
+    bpy.ops.object.select_all(action='SELECT')
+    bpy.ops.object.delete()
+
+def duplicate_snowflakes(flake_name, count, x_range, y_range, z_range):
+    """Kar tanelerini çoğaltır ve rastgele yerleştirir."""
+    flake = bpy.data.objects.get(flake_name)
+    if not flake:
+        print("Snowflake object not found.")
+        return
+
+    # Snowflake nesnesini geçici olarak görünür hale getir
+    flake.hide_viewport = False
+    flake.hide_render = False
+
+    for i in range(count):
+        new_flake = flake.copy()
+        new_flake.scale = (1.3, 1.3, 1.3)
+        new_flake.rotation_euler = (
+            random.uniform(0, 6.28),
+            random.uniform(0, 6.28),
+            random.uniform(0, 6.28),
+        )
+        new_flake.location = (
+            random.uniform(*x_range),
+            random.uniform(*y_range),
+            random.uniform(*z_range),
+        )
+        bpy.context.collection.objects.link(new_flake)
+        
+        # Rigidbody ekle ve ayarlarını yap
+        bpy.context.view_layer.objects.active = new_flake
+        bpy.ops.rigidbody.object_add()
+        configure_rigidbody(new_flake)
+
+    # Snowflake nesnesini tekrar gizle
+    flake.hide_viewport = True
+    flake.hide_render = True
+
+
+def configure_rigidbody(obj):
+    """Rigidbody ayarlarını yapar."""
+    obj.rigid_body.mass = 0.1
+    obj.rigid_body.friction = 0.2
+    obj.rigid_body.use_margin = True
+    obj.rigid_body.collision_margin = 0.001
+    obj.rigid_body.linear_damping = 0.95
+    obj.rigid_body.angular_damping = 0.95
+    obj.rigid_body.use_deactivation = False
+
+def create_ground(size, location):
+    """Zemin oluştur ve rigidbody ayarlarını uygula."""
+    bpy.ops.mesh.primitive_plane_add(size=size, location=location)
+    ground = bpy.context.active_object
     bpy.ops.rigidbody.object_add()
-    
-    # Rigidbody ayarları
-    new_flake.rigid_body.mass = 0.1
-    new_flake.rigid_body.friction = 0.2
-    new_flake.rigid_body.use_margin = True
-    new_flake.rigid_body.collision_margin = 0.001
-    new_flake.rigid_body.linear_damping = 0.95
-    new_flake.rigid_body.angular_damping = 0.95
-    new_flake.rigid_body.use_deactivation = False
+    ground.rigid_body.type = 'PASSIVE'
+    return ground
 
-# Orijinal objeyi gizle
-flake.hide_viewport = True
+def create_white_material():
+    """Beyaz bir materyal oluştur."""
+    material = bpy.data.materials.new(name="WhiteMaterial")
+    material.use_nodes = True
+    bsdf = material.node_tree.nodes["Principled BSDF"]
+    bsdf.inputs["Base Color"].default_value = (1, 1, 1, 1)
+    bsdf.inputs["Roughness"].default_value = 0.8
+    bsdf.inputs["IOR"].default_value = 0.2
+    return material
 
-# 2. Zemini oluştur
-bpy.ops.mesh.primitive_plane_add(size=100, location=(0, 0, -2))
-ground = bpy.context.active_object
-bpy.ops.rigidbody.object_add()
-ground.rigid_body.type = 'PASSIVE'
+def add_wind_force(location, rotation, strength, flow, noise):
+    """Rüzgar ekler ve ayarlarını yapar."""
+    bpy.ops.object.effector_add(type='WIND', location=location)
+    wind = bpy.context.active_object
+    wind.rotation_euler = rotation
+    wind.field.strength = strength
+    wind.field.flow = flow
+    wind.field.noise = noise
 
-# 3. Beyaz materyali oluştur
-material = bpy.data.materials.new(name="WhiteMaterial")
-material.use_nodes = True
-bsdf = material.node_tree.nodes["Principled BSDF"]
+def add_turbulence_force(location, strength, size, flow):
+    """Türbülans ekler ve ayarlarını yapar."""
+    bpy.ops.object.effector_add(type='TURBULENCE', location=location)
+    turbulence = bpy.context.active_object
+    turbulence.field.strength = strength
+    turbulence.field.size = size
+    turbulence.field.flow = flow
 
-# 4. Base Color'u beyaz yap
-bsdf.inputs["Base Color"].default_value = (1, 1, 1, 1)  # RGB: Beyaz, Alpha: 1
+def create_text_objects(numbers, start_location, scale, rotation):
+    """Belirtilen numaralardan bir yazı oluşturur."""
+    for idx, num in enumerate(numbers):
+        # Text nesnesini ekle
+        bpy.ops.object.text_add(location=(
+            start_location[0] + idx * 1.3,  # Harfler arası mesafe
+            start_location[1],
+            start_location[2],
+        ))
+        text = bpy.context.active_object
+        text.data.body = num
+        text.data.extrude = 0.1  # Derinlik ekle
 
-# 5. Roughness ve Specular ayarlarını düzenle
-bsdf.inputs["Roughness"].default_value = 0.8  # Hafif mat görünüm
-bsdf.inputs["IOR"].default_value = 0.2  # Hafif parlaklık
+        # Pivot noktasını ortala
+        bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='BOUNDS')
 
-# zeminin materyalini ata
-ground.data.materials.append(material)
+        # Ölçek ve rotasyonu uygula
+        text.scale = scale
+        text.rotation_euler = rotation
 
-# Wind Force Field ekle
-bpy.ops.object.effector_add(type='WIND', location=(0, -5, 0))
-wind = bpy.context.active_object
-# Wind Force Field ayarları
-wind.rotation_euler = (0, 0.45, 0)  # Rüzgar açısını biraz daha artırdım
-wind.field.strength = 15.0  # Rüzgar gücünü artırdım
-wind.field.flow = 2.5  # Akış düzgünlüğünü artırdım
-wind.field.noise = 1.5  # Rüzgar türbülansını artırdım
+        # Mesh'e çevir ve Rigidbody ekle
+        bpy.ops.object.convert(target='MESH')
+        bpy.ops.rigidbody.object_add()
+        configure_text_rigidbody(text)
 
-# Turbulence Force Field ekle
-bpy.ops.object.effector_add(type='TURBULENCE', location=(0, 0, 2))
-turbulence = bpy.context.active_object
-# Turbulence Force Field ayarları
-turbulence.field.strength = 30.0  # Türbülans gücünü artırdım
-turbulence.field.size = 7.0  # Türbülans alanı boyutunu artırdım
-turbulence.field.flow = 1.5  # Akış düzgünlüğünü artırdım
+        # Material ekle
+        create_red_material(text, f"Red_{num}")
 
-# Background plane oluştur
-bpy.ops.mesh.primitive_plane_add(size=50, location=(0, -10, 3.2))
-background = bpy.context.active_object
-background.rotation_euler.x = 1.5708  # 90 derece döndür (dikey duracak şekilde)
-background.scale = (0.4, 0.22, 1.0)  # Daha geniş bir arka plan oluştur
-
-# Texture oluştur
-# Yeni material oluştur
-mat = bpy.data.materials.new(name="Background_Material")
-mat.use_nodes = True
-nodes = mat.node_tree.nodes
-
-# Tüm nodes'ları temizle
-nodes.clear()
-
-# Gerekli nodes'ları ekle
-node_tex_coord = nodes.new('ShaderNodeTexCoord')
-node_tex_image = nodes.new('ShaderNodeTexImage')
-node_emit = nodes.new('ShaderNodeEmission')
-node_output = nodes.new('ShaderNodeOutputMaterial')
-
-# Texture'u yükle
-node_tex_image.image = bpy.data.images.load("/Users/furkanakgun/Downloads/final_exam/snowyDark.png")
-
-# Nodes'ları bağla
-links = mat.node_tree.links
-links.new(node_tex_coord.outputs['UV'], node_tex_image.inputs['Vector'])
-links.new(node_tex_image.outputs['Color'], node_emit.inputs['Color'])
-links.new(node_emit.outputs['Emission'], node_output.inputs['Surface'])
-
-# Material'i plane'e ata
-background.data.materials.append(mat)
-
-# 2025 yazısını oluştur
-numbers = "5202"
-for idx, num in enumerate(numbers):
-    # Background'ın önünde ve biraz yukarıda oluştur
-    bpy.ops.object.text_add(location=(idx * 1.3 - 2, -5, 0))
-    text = bpy.context.active_object
-    text.data.body = num
-    text.data.extrude = 0.1
-    
-    # Pivot noktasını merkeze al
-    bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='BOUNDS')
-
-    text.scale = (2.2, 2.2, 2.2)
-    
-    # Kameraya doğru döndür x=90, y=0, z=180
-    text.rotation_euler.x = 1.5708
-    text.rotation_euler.y = 0
-    text.rotation_euler.z = 3.14159
-    
-    # Mesh'e çevir
-    bpy.ops.object.convert(target='MESH')
-    
-    # Rigidbody ekle ve şeklini box yap
-    bpy.ops.rigidbody.object_add()
+def configure_text_rigidbody(text):
+    """Text nesnesine rigidbody ayarları uygular."""
     text.rigid_body.mass = 0.2
     text.rigid_body.friction = 0.5
     text.rigid_body.collision_shape = 'BOX'
-    
-    # Z ekseninde dönmeyi engelle
-    text.rigid_body.linear_damping = 0.8  # Add some damping for stability
-    text.rigid_body.angular_damping = 0.9  # Add angular damping
-    
-    # Kırmızı material oluştur ve ata
-    mat = bpy.data.materials.new(name=f"Red_{num}")
+    text.rigid_body.linear_damping = 0.8  # Lineer hareketi azalt
+    text.rigid_body.angular_damping = 0.9  # Açısal hareketi azalt
+
+def create_red_material(obj, material_name):
+    obj.color = (1, 0, 0, 1) 
+    # obj.data.materials.append(mat)
+
+def create_background(size, location, image_path):
+    """Arka plan oluştur ve materyal uygula."""
+    bpy.ops.mesh.primitive_plane_add(size=size, location=location)
+    background = bpy.context.active_object
+    background.rotation_euler.x = 1.5708
+    background.scale = (0.4, 0.22, 1.0)
+
+    # Materyal oluştur
+    mat = bpy.data.materials.new(name="Background_Material")
     mat.use_nodes = True
-    mat.node_tree.nodes["Principled BSDF"].inputs[0].default_value = (1, 0, 0, 1)
-    text.data.materials.append(mat)
+    nodes = mat.node_tree.nodes
+    nodes.clear()
 
+    # Gerekli düğümleri oluştur
+    node_tex_coord = nodes.new('ShaderNodeTexCoord')
+    node_tex_image = nodes.new('ShaderNodeTexImage')
+    node_emit = nodes.new('ShaderNodeEmission')
+    node_output = nodes.new('ShaderNodeOutputMaterial')
 
-bpy.ops.object.light_add(type='SUN', location=(10, 10, 10))
-light = bpy.context.active_object
-light.data.energy = 5  # Işık gücünü artır
+    # Texture'u bağla
+    node_tex_image.image = bpy.data.images.load(image_path)
+    links = mat.node_tree.links
+    links.new(node_tex_coord.outputs['UV'], node_tex_image.inputs['Vector'])
+    links.new(node_tex_image.outputs['Color'], node_emit.inputs['Color'])
+    links.new(node_emit.outputs['Emission'], node_output.inputs['Surface'])
+
+    background.data.materials.append(mat)
+
+# Main method
+# clear_scene()
+duplicate_snowflakes("Snowflake", 250, (-10, 10), (-10, 10), (0, 5))
+ground = create_ground(100, (0, 0, -2))
+create_text_objects(
+    numbers="5202",                # Yazılacak rakamlar
+    start_location=(-2, -5, 0),    # Başlangıç konumu
+    scale=(2.2, 2.2, 2.2),         # Ölçek
+    rotation=(1.5708, 0, 3.14159)  # Döndürme açıları (x, y, z)
+)
+ground_material = create_white_material()
+ground.data.materials.append(ground_material)
+add_wind_force((0, -5, 0), (0, 0.45, 0), 15.0, 2.5, 1.5)
+add_turbulence_force((0, 0, 2), 30.0, 7.0, 1.5)
+# create_background(50, (0, -10, 3.2), "/Users/furkanakgun/Downloads/final_exam/snowyDark.png")
+create_background(50, (0, -10, 3.2), "C://Users//fakgun//Downloads//final_exam//snowyDark.png")

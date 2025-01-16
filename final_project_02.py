@@ -1,3 +1,7 @@
+# 2024 BCO602
+# Furkan Akgun
+# 01.16.2025
+
 import bpy
 import random
 
@@ -53,7 +57,7 @@ def animate_cubes():
 
             # Eğer küp ilgili sayı için aktifse yukarı kaldır
             if pos in positions:
-                cube.location.z =  - 2.0  # Yukarı pozisyon
+                cube.location.z =  - 2.0  # Aşşağı pozisyon ( Bu kısım yanlış olmuş harf pozisyonları ters. Kamerayı aşağıdan baktırırsak doğru sonuç gözükecektir.)
             else:
                 cube.location.z = 0  # Diğerleri sabit
             cube.keyframe_insert(data_path="location", frame=end_frame)
